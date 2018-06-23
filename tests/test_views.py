@@ -4,10 +4,12 @@ Tests for django-registration's built-in views.
 """
 
 from django.core import signing
-from django.test import override_settings
+from django.test import RequestFactory, override_settings
 from django.urls import reverse
 
-from django_registration.backends.hmac.views import REGISTRATION_SALT
+from django_registration.backends.hmac.views import (
+    REGISTRATION_SALT, RegistrationView
+)
 
 from .base import RegistrationTestCase
 
@@ -44,3 +46,34 @@ class ActivationViewTests(RegistrationTestCase):
             )
         )
         self.assertRedirects(resp, '/activate/complete/')
+
+
+@override_settings(ROOT_URLCONF='django_registration.backends.hmac.urls')
+class HMACRegistrationViewTest(RegistrationTestCase):
+    """Test for registration.backends.hmac.views.RegistrationView directly
+    """
+    @override_settings(SECURE_PROXY_SSL_HEADER=None)
+    def test_default_scheme(self):
+        view = RegistrationView()
+        factory = RequestFactory()
+        view.request = factory.get('')
+        context = view.get_email_context('')
+        self.assertEqual(context['scheme'], 'http')
+
+    @override_settings(
+        SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO', 'https'))
+    def test_not_secure_scheme(self):
+        view = RegistrationView()
+        factory = RequestFactory()
+        view.request = factory.get('', HTTP_X_FORWARDED_PROTO='http')
+        context = view.get_email_context('')
+        self.assertEqual(context['scheme'], 'http')
+
+    @override_settings(
+        SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO', 'https'))
+    def test_secure_scheme(self):
+        view = RegistrationView()
+        factory = RequestFactory()
+        view.request = factory.get('', HTTP_X_FORWARDED_PROTO='https')
+        context = view.get_email_context('')
+        self.assertEqual(context['scheme'], 'https')
